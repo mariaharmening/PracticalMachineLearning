@@ -1,0 +1,158 @@
+---
+title: "Practical Machine Learning Project - Weight Lifting Technique"
+author: "Maria Harmening"
+date: "February 2, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, message=FALSE, tinytex.verbose = TRUE)
+```
+
+## Background
+
+Devices such as Jawbone Up, Nike FuelBand, and Fitbit are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. Users regularly use these devices to quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+Six young health participants were asked to perform one set of 10 repetitions of the Unilateral Dumbbell Biceps Curl in five different fashions: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E).  Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience. We made sure that all participants could easily simulate the mistakes in a safe and controlled manner by using a relatively light dumbbell (1.25kg).
+
+My goal is to predict the manner (Class) in which they did the exercise.
+ 
+More information is available from the website here: http://web.archive.org/web/20161224072740/http:/groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+The training data for this project are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+## Load, Explore, and Clean the Data
+
+```{r, echo=TRUE, cache=TRUE}
+trainingRaw <- read.csv("pml-training.csv")
+testingRaw <- read.csv("pml-testing.csv")
+#str(trainingRaw)
+#str(testingRaw)
+trainingStep2 <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!",""))
+testingStep2 <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!",""))
+colnames(trainingStep2)==colnames(testingStep2)
+colnames(trainingStep2)[ncol(trainingStep2)]
+colnames(testingStep2)[ncol(testingStep2)]
+levels(trainingStep2[,ncol(trainingStep2)])
+levels(testingStep2[,ncol(testingStep2)])
+
+trainingStep3 <- trainingStep2[,colSums(is.na(trainingStep2)) == 0]
+testingStep3 <- testingStep2[,colSums(is.na(testingStep2)) == 0]
+colnames(trainingStep3)==colnames(testingStep3)
+colnames(trainingStep3)[ncol(trainingStep3)]
+colnames(testingStep3)[ncol(testingStep3)]
+levels(trainingStep3[,ncol(trainingStep3)])
+levels(testingStep3[,ncol(testingStep3)])
+
+trainingClean <- trainingStep3[, -c(1:7)]
+testingClean <- testingStep3[, -c(1:7)]
+```
+
+I executed several loads of the training and testing data sets. The raw data has 160 columns; there are NA and Div/0 that need to be normalized.  I reloaded and removed the columns that are incomplete from both sets and checked to ensure that the training and testing features remained identical with the exception of the classe and problem_id columns; this leaves 60 columns.  Upon further examination of the columns, I removed the first seven columns because they are not related to the sensors.  There are 53 columns within the testing and training datasets; there are 20 observations in the testing dataset and 19622 observations in the training dataset.
+
+## Training and Validation Dataset Creation
+
+```{r, echo=TRUE, cache=TRUE}
+library(caret)
+set.seed(123456) 
+inTrain <- createDataPartition(trainingClean$classe, p = 0.7, list = FALSE)
+trainingData <- trainingClean[inTrain, ]
+validationData <- trainingClean[-inTrain, ]
+
+```
+
+## Classification Tree
+```{r, echo=TRUE, cache=TRUE}
+
+ctModel <- train(classe~., method="rpart", data=trainingData)
+print(ctModel$finalModel)
+plot(ctModel$finalModel, uniform=TRUE, main="Classification Tree")
+text(ctModel$finalModel, use.n=TRUE, cex=.8)
+
+```
+Predict with Classification Tree Model
+
+```{r, echo=TRUE, cache=TRUE}
+
+ctPredict <- predict(ctModel, newdata=validationData)
+ctConfusion <- confusionMatrix(ctPredict, validationData$classe)
+
+```
+Classification Tree accuracy 
+`r ctConfusion$overall[1]`
+
+## Random Forest
+```{r, echo=TRUE, cache=TRUE}
+set.seed(123456)
+rfModel <- train(classe~., method="rf", data=trainingData, allowParallel=TRUE)
+print(rfModel$finalModel)
+plot(rfModel$finalModel, main="Random Forest")
+```
+
+Predict with Random Forest Model
+
+```{r, echo=TRUE, cache=TRUE}
+
+rfPredict <- predict(rfModel, newdata=validationData)
+rfConfusion <- confusionMatrix(rfPredict, validationData$classe)
+
+```
+Random Forest accuracy 
+`r rfConfusion$overall[1]`
+
+
+## Boosting
+```{r, echo=TRUE, cache=TRUE}
+set.seed(123456)
+bModel <- train(classe~., method="gbm", data=trainingData, verbose=FALSE)
+print(bModel$finalModel)
+plot(bModel, main="Boosting")
+```
+
+Predict with Boosting Model
+
+```{r, echo=TRUE, cache=TRUE}
+
+bPredict <- predict(bModel, newdata=validationData)
+bConfusion <- confusionMatrix(bPredict, validationData$classe)
+
+```
+Boosting accuracy 
+`r bConfusion$overall[1]`
+
+
+## Predicting the Test set
+
+Classification Tree
+```{r, echo=TRUE, cache=TRUE}
+
+ctPredictTest <- predict(ctModel, newdata=testingClean)
+ctPredictTest
+
+```
+
+Random Forest
+```{r, echo=TRUE, cache=TRUE}
+
+rfPredictTest <- predict(rfModel, newdata=testingClean)
+rfPredictTest
+
+```
+
+Boosting
+```{r, echo=TRUE, cache=TRUE}
+
+bPredictTest <- predict(bModel, newdata=testingClean)
+bPredictTest
+
+```
+
+## Model Selection
+
+Classification Trees is not a good model for this application.  This leaves Random Forest and Boosting.  Both have excellent accuracy, .99 and .96 respectively.  Because the accuracy for Random Forest is slighly better and because of the overall strengths of Random Forest, I would move forward with it.  However, both Random Forest and Boosting are great models for this application.
